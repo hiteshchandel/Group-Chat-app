@@ -59,6 +59,69 @@
             <button type="button" id="backToLogin" class="btn btn-link w-100 mt-2">Back to Login</button>
         </form>
     </div>
+
+    <script>
+        const loginFrom = document.getElementById("loginForm");
+        loginFrom.addEventListener("submit", async (e) => {
+            e.preventDefault();
+
+            const identifier = document.getElementById("loginIdentifier").value.trim();
+            const password = document.getElementById("loginPassword").value.trim();
+
+            if (!identifier || !password) {
+                alert("Please enter email/phone and password");
+                return;
+            }
+
+            // Decide if identifier is email or mobile
+            const payload = {};
+            if (/^\d+$/.test(identifier)) {
+                payload.mobile = identifier; // only digits = mobile
+            } else {
+                payload.email = identifier; // otherwise treat as email
+            }
+            payload.password = password;
+
+            try {
+                const res = await fetch("http://localhost:3000/api/auth/login", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload)
+                });
+
+                const data = await res.json();
+
+                if (!res.ok) {
+                    alert(data.message || "Login failed");
+                    return;
+                }
+
+                // ✅ Save token
+                localStorage.setItem("token", data.token);
+                localStorage.setItem("user", JSON.stringify(data.user));
+                
+                e.target.reset();
+                alert("Login successful!");
+                window.location.href = "/chat"; // redirect to chat page
+            } catch (err) {
+                console.error("Error:", err);
+                alert("Something went wrong");
+            }
+        });
+
+        // Forgot password toggle
+        document.getElementById("showForgotForm").addEventListener("click", () => {
+            document.getElementById("loginForm").style.display = "none";
+            document.getElementById("forgotForm").style.display = "block";
+        });
+
+        document.getElementById("backToLogin").addEventListener("click", () => {
+            document.getElementById("forgotForm").style.display = "none";
+            document.getElementById("loginForm").style.display = "block";
+        });
+    </script>
+
 </body>
+
 
 </html>
