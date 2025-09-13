@@ -1,8 +1,9 @@
 require("dotenv").config();
 const express = require("express");
 const path = require('path')
-const sequelize = require('./config/db'); 
+const { sequelize } = require('./models/association');
 const authRoutes = require('./routes/authRoutes');
+const chatRoutes = require('./routes/messageRoutes');
 
 const app = express();
 
@@ -25,6 +26,7 @@ app.get('/chat', (req, res) => {
 });
 
 app.use('/api/auth', authRoutes);
+app.use('/api/chat', chatRoutes);
 
 // Sync DB & start server
 sequelize.sync({ alter: true })
