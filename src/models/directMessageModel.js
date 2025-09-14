@@ -1,7 +1,7 @@
 const { DataTypes } = require('sequelize');
 const sequelize = require('../config/db');
 
-const Message = sequelize.define('Message', {
+const DirectMessage = sequelize.define('DirectMessage', {
     id: {
         type: DataTypes.INTEGER,
         autoIncrement: true,
@@ -15,4 +15,4 @@ const Message = sequelize.define('Message', {
     timestamps: true
 });
 
-module.exports = Message;
+module.exports = DirectMessage;

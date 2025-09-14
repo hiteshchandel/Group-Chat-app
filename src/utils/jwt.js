@@ -32,7 +32,17 @@ function verifyToken(req, res, next) {
     });
 }
 
+function verifyTokenSocket(token) {
+    try {
+        const user = jwt.verify(token, SECRET_KEY);
+        return user; 
+    } catch (err) {
+        throw new Error("Invalid token");
+    }
+}
+
 module.exports = {
     generateToken,
-    verifyToken
+    verifyToken,
+    verifyTokenSocket
 };
