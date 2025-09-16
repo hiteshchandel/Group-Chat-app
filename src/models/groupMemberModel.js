@@ -12,13 +12,7 @@ const GroupMember = sequelize.define('GroupMember', {
         defaultValue: false
     }
 }, {
-    timestamps: true,
-    indexes: [
-        {
-            unique: true,
-            fields: ['userId', 'groupId']
-        }
-    ]
+    timestamps: true
 });
 
 module.exports = GroupMember;

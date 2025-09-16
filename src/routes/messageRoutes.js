@@ -3,7 +3,10 @@ const { verifyToken } = require("../utils/jwt");
 const messageController = require("../controllers/messageController");
 const router = express.Router();
 
-router.post('/send', verifyToken, messageController.sendMessage);
-router.get('/:groupId', verifyToken, messageController.getGroupMessages);
+// ✅ Send message in a group
+router.post("/:groupId/send", verifyToken, messageController.sendGroupMessage);
+
+// ✅ Get all messages of a group
+router.get("/:groupId/messages", verifyToken, messageController.getGroupMessages);
 
 module.exports = router;

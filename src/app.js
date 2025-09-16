@@ -1,12 +1,14 @@
 require("dotenv").config();
 const express = require("express");
-const path = require('path');
-const http = require('http');
-const { Server } = require('socket.io');
-const { sequelize } = require('./models/association');
-const authRoutes = require('./routes/authRoutes');
-const contactRoutes = require('./routes/contactRoutes');
-const directMessageRoutes = require('./routes/directMessageRoutes');
+const path = require("path");
+const http = require("http");
+const { Server } = require("socket.io");
+const { sequelize, GroupMember, User } = require("./models/association");
+const authRoutes = require("./routes/authRoutes");
+const contactRoutes = require("./routes/contactRoutes");
+const directMessageRoutes = require("./routes/directMessageRoutes");
+const groupRoutes = require("./routes/groupRoutes");
+const messageRoutes = require("./routes/messageRoutes");
 const { verifyTokenSocket } = require("./utils/jwt");
 
 const app = express();
@@ -14,9 +16,9 @@ const server = http.createServer(app);
 
 const io = new Server(server, {
   cors: {
-    origin: '*',
-    methods: ['GET', 'POST']
-  }
+    origin: "*",
+    methods: ["GET", "POST"],
+  },
 });
 
 app.use(express.json());
@@ -25,22 +27,25 @@ app.use(express.urlencoded({ extended: true }));
 // serve static files
 app.use(express.static(path.join(__dirname, "views")));
 
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views', 'login.html'));
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "views", "login.html"));
 });
-
-app.get('/signup', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views', 'signup.html'));
+app.get("/signup", (req, res) => {
+  res.sendFile(path.join(__dirname, "views", "signup.html"));
 });
-
-app.get('/chat', (req, res) => {
-  res.sendFile(path.join(__dirname, 'views', 'chat.html'));
+app.get("/chat", (req, res) => {
+  res.sendFile(path.join(__dirname, "views", "chat.html"));
+});
+app.get("/group", (req, res) => {
+  res.sendFile(path.join(__dirname, "views", "group.html"));
 });
 
 // APIs
-app.use('/api/auth', authRoutes);
-app.use('/api/contacts', contactRoutes);
-app.use('/api/messages', directMessageRoutes);
+app.use("/api/auth", authRoutes);
+app.use("/api/contacts", contactRoutes);
+app.use("/api/messages", directMessageRoutes); 
+app.use("/api/groups", groupRoutes);
+app.use("/api/group-messages", messageRoutes);   
 
 // Track online users
 const onlineUsers = new Map();
@@ -66,17 +71,53 @@ io.on("connection", (socket) => {
     console.log("📌 Online users:", onlineUsers);
   });
 
-  // Listen for new messages
+  // 🔹 Direct message
   socket.on("newMessage", (msg) => {
-    const { id, senderId, receiverId, content, createdAt } = msg;
+    const { senderId, receiverId } = msg;
 
-    // Emit back to sender
     io.to(socket.id).emit("message", msg);
 
-    // Emit to receiver if online
     const receiverSocketId = onlineUsers.get(receiverId);
     if (receiverSocketId) {
       io.to(receiverSocketId).emit("message", msg);
+    }
+  });
+
+  // 🔹 Group message
+  socket.on("newGroupMessage", async (msg) => {
+    const { senderId, groupId } = msg;
+
+    try {
+      // ✅ Check sender is group member
+      const isMember = await GroupMember.findOne({
+        where: { GroupId: groupId, UserId: senderId },
+      });
+      if (!isMember) {
+        console.warn(`❌ User ${senderId} is not in group ${groupId}`);
+        return;
+      }
+
+      // ✅ Fetch all group members
+      const members = await GroupMember.findAll({
+        where: { GroupId: groupId },
+        include: [{ model: User, attributes: ["id"] }],
+      });
+
+      // ✅ Send to all except sender
+      for (const member of members) {
+        if (member.User.id !== senderId) {
+          const memberSocketId = onlineUsers.get(member.User.id);
+          if (memberSocketId) {
+            io.to(memberSocketId).emit("groupMessage", msg);
+          }
+        }
+      }
+
+      // ✅ Emit back to sender
+      io.to(socket.id).emit("groupMessage", msg);
+    } catch (err) {
+      console.error("❌ Error sending group message:", err);
+      socket.emit("error", { message: "Failed to send group message" });
     }
   });
 
@@ -89,13 +130,14 @@ io.on("connection", (socket) => {
 });
 
 // Sync DB & start server
-sequelize.sync({ alter: true })
+sequelize
+  .sync()
   .then(() => {
-    console.log('✅ Database & tables ready!');
+    console.log("✅ Database & tables ready!");
     server.listen(process.env.PORT, () => {
       console.log(`🚀 Server running on port ${process.env.PORT}`);
     });
   })
   .catch((err) => {
-    console.error('❌ Error creating database & tables:', err);
+    console.error("❌ Error creating database & tables:", err);
   });

@@ -1,139 +1,489 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <title>SeaTalk - Groups</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 0;
-      display: flex;
-      height: 100vh;
-      background: #f2f5f9;
-    }
-    aside {
-      width: 300px;
-      background: #023e8a;
-      color: #fff;
-      display: flex;
-      flex-direction: column;
-      padding: 20px;
-      box-sizing: border-box;
-    }
-    aside h2 { text-align: center; }
-    #statusMessage {
-      font-size: 0.85rem;
-      color: #ffc107;
-      margin: 5px 0;
-    }
-    aside ul {
-      list-style: none;
-      padding: 0;
-      margin: 10px 0;
-    }
-    aside li {
-      background: #0077b6;
-      margin: 5px 0;
-      padding: 10px;
-      border-radius: 5px;
-      cursor: pointer;
-    }
-    aside li:hover { background: #0096c7; }
-    aside select, aside input, aside button {
-      width: 100%;
-      margin: 5px 0;
-      padding: 10px;
-      border: none;
-      border-radius: 4px;
-    }
-    aside button {
-      background: #00b4d8;
-      color: #fff;
-      cursor: pointer;
-    }
-    aside button:hover { background: #0077b6; }
-    main {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-    }
-    header {
-      background: #0077b6;
-      color: #fff;
-      padding: 20px;
-      font-weight: bold;
-    }
-    #messages {
-      flex: 1;
-      padding: 20px;
-      overflow-y: auto;
-      background: #e6f2ff;
-    }
-    .message {
-      max-width: 60%;
-      padding: 10px 15px;
-      margin: 5px 0;
-      border-radius: 15px;
-    }
-    .own { background: #0077b6; color: #fff; align-self: flex-end; }
-    .other { background: #fff; border: 1px solid #ccc; align-self: flex-start; }
-    #form {
-      display: flex;
-      flex-direction: row;
-      align-items: center;
-      padding: 15px 20px;
-      background: #0077b6;
-    }
-    #form input[type="text"] {
-      flex: 1;
-      padding: 12px;
-      border-radius: 20px;
-      border: none;
-    }
-    #form input[type="file"] {
-      margin-left: 10px;
-    }
-    #form button {
-      margin-left: 10px;
-      padding: 12px 20px;
-      border-radius: 20px;
-      border: none;
-      background: #023e8a;
-      color: #fff;
-      cursor: pointer;
-    }
-    #form button:hover { background: #0077b6; }
-  </style>
-</head>
-<body>
-  <aside>
-    <h2>SeaTalk Groups</h2>
-    <div id="statusMessage"></div>
-    <ul id="groupsList"></ul>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SeaTalk - Groups</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css"
+      rel="stylesheet"
+    />
+    <style>
+      body {
+        overflow: hidden;
+        font-family: system-ui, sans-serif;
+      }
 
-    <h3>Contacts</h3>
-    <select id="contactsSelect" multiple></select>
-    <button id="addMemberBtn">Add Member</button>
-    <button id="removeMemberBtn">Remove Member</button>
-    <button id="makeAdminBtn">Make Admin</button>
+      /* Sidebar */
+      #sidebar {
+        border-right: 1px solid #e5e7eb;
+        display: flex;
+        flex-direction: column;
+        transition: transform 0.3s ease;
+      }
+      .sidebar-header {
+        background: #0d6efd;
+        color: #fff;
+        font-weight: 600;
+        padding: 12px;
+        text-align: center;
+      }
+      .group-item {
+        background: #f8f9fa;
+        padding: 10px;
+        margin: 5px 10px;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: background 0.2s;
+      }
+      .group-item:hover {
+        background: #e9ecef;
+      }
 
-    <h3>Create New Group</h3>
-    <form id="createGroupForm">
-      <input type="text" id="groupName" placeholder="Group name..." required />
-      <button type="submit">Create Group</button>
-    </form>
-  </aside>
+      /* Chat section */
+      #chatSection {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+      }
+      #chatMessages {
+        flex: 1;
+        overflow-y: auto;
+        padding: 15px;
+        background: #f9fafb;
+      }
+      .message {
+        max-width: 70%;
+        padding: 10px 15px;
+        border-radius: 18px;
+        margin-bottom: 12px;
+        font-size: 0.9rem;
+      }
+      .message.sent {
+        background: #dbeafe;
+        margin-left: auto;
+      }
+      .message.received {
+        background: #fff;
+        border: 1px solid #e5e7eb;
+        margin-right: auto;
+      }
+      .timestamp {
+        font-size: 0.7rem;
+        color: #6b7280;
+        display: block;
+        margin-top: 3px;
+        text-align: right;
+      }
 
-  <main>
-    <header>Group Chat</header>
-    <div id="messages"></div>
-    <form id="form">
-      <input id="input" type="text" placeholder="Type your message here..." />
-      <input type="file" id="fileUpload" />
-      <button type="submit">Send</button>
-    </form>
-  </main>
+      /* Input */
+      .chat-input {
+        border-top: 1px solid #e5e7eb;
+        background: #fff;
+        padding: 8px 12px;
+      }
+      .chat-input .form-control {
+        flex: 1;
+        border-radius: 25px;
+      }
+      .chat-input .btn {
+        border-radius: 25px;
+      }
 
-  <script src="/socket.io/socket.io.js"></script>
-</body>
+      /* Mobile Sidebar */
+      #menuToggle {
+        display: none;
+        cursor: pointer;
+        font-size: 1.5rem;
+      }
+      @media (max-width: 768px) {
+        #sidebar {
+          position: fixed;
+          top: 0;
+          left: 0;
+          height: 100%;
+          width: 70%;
+          background: white;
+          z-index: 1051;
+          transform: translateX(-100%);
+        }
+        #sidebar.show {
+          transform: translateX(0);
+        }
+        #menuToggle {
+          display: block;
+        }
+        #backdrop {
+          display: none;
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          background: rgba(0, 0, 0, 0.5);
+          z-index: 1050;
+        }
+        #backdrop.show {
+          display: block;
+        }
+      }
+    </style>
+  </head>
+  <body class="vh-100">
+    <div class="container-fluid h-100">
+      <div class="row h-100">
+        <!-- Sidebar -->
+        <div class="col-12 col-md-3 col-lg-3 bg-white p-0" id="sidebar">
+          <div class="sidebar-header">SeaTalk Groups</div>
+          <div
+            id="statusMessage"
+            class="text-warning text-center small py-1"
+          ></div>
+
+          <ul
+            class="list-unstyled flex-grow-1 overflow-auto mb-0"
+            id="groupsList"
+          ></ul>
+
+          <div class="p-2 border-top">
+            <h6 class="fw-bold">Manage Members</h6>
+            <select
+              id="contactsSelect"
+              multiple
+              class="form-select mb-2"
+            ></select>
+            <button
+              class="btn btn-sm btn-outline-primary w-100 mb-1"
+              id="addMemberBtn"
+            >
+              <i class="bi bi-person-plus"></i> Add Member
+            </button>
+            <button
+              class="btn btn-sm btn-outline-danger w-100 mb-1"
+              id="removeMemberBtn"
+            >
+              <i class="bi bi-person-dash"></i> Remove Member
+            </button>
+            <button
+              class="btn btn-sm btn-outline-success w-100"
+              id="makeAdminBtn"
+            >
+              <i class="bi bi-shield-check"></i> Make Admin
+            </button>
+          </div>
+
+          <div class="p-2 border-top">
+            <h6 class="fw-bold">Create Group</h6>
+            <form id="createGroupForm" class="d-flex flex-column gap-2">
+              <input
+                type="text"
+                id="groupName"
+                class="form-control"
+                placeholder="Group name..."
+                required
+              />
+              <!-- Updated to checkbox container -->
+              <div
+                id="createGroupMembersCheckboxes"
+                class="mb-2"
+                style="max-height: 200px; overflow: auto"
+              ></div>
+              <button type="submit" class="btn btn-primary">
+                <i class="bi bi-plus-lg"></i> Create Group
+              </button>
+            </form>
+          </div>
+        </div>
+
+        <!-- Chat Section -->
+        <div class="col d-flex flex-column p-0" id="chatSection">
+          <div
+            class="d-flex justify-content-between align-items-center bg-primary text-white p-2"
+          >
+            <i class="bi bi-list" id="menuToggle"></i>
+            <span id="chatHeader">Select a group to start chat</span>
+            <span></span>
+          </div>
+
+          <div id="chatMessages" class="flex-grow-1">
+            <div class="text-muted text-center mt-5">
+              No messages yet. Start chatting!
+            </div>
+          </div>
+
+          <!-- Input -->
+          <div class="chat-input d-flex align-items-center gap-2">
+            <input
+              type="text"
+              id="messageInput"
+              class="form-control"
+              placeholder="Type a message..."
+            />
+            <input type="file" id="fileUpload" hidden />
+            <button class="btn btn-primary px-3" id="sendBtn">
+              <i class="bi bi-send text-white"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Backdrop for mobile -->
+    <div id="backdrop"></div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+      const token = sessionStorage.getItem("token");
+      const user = JSON.parse(sessionStorage.getItem("user"));
+      let currentGroupId = null;
+
+      if (!token || !user) {
+        window.location.href = "/";
+      }
+
+      const socket = io({ auth: { token } });
+      socket.emit("join", { userId: user.id });
+
+      const groupsList = document.getElementById("groupsList");
+      const chatHeader = document.getElementById("chatHeader");
+      const chatMessages = document.getElementById("chatMessages");
+      const messageInput = document.getElementById("messageInput");
+      const sendBtn = document.getElementById("sendBtn");
+      const contactsSelect = document.getElementById("contactsSelect");
+      const addMemberBtn = document.getElementById("addMemberBtn");
+      const removeMemberBtn = document.getElementById("removeMemberBtn");
+      const makeAdminBtn = document.getElementById("makeAdminBtn");
+      const createGroupMembersCheckboxes = document.getElementById(
+        "createGroupMembersCheckboxes"
+      );
+
+      // Load user's groups
+      async function loadGroups() {
+        try {
+          const res = await fetch("/api/groups/my-groups", {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          const groups = await res.json();
+          groupsList.innerHTML = "";
+          groups.forEach((g) => {
+            const li = document.createElement("li");
+            li.className = "group-item";
+            li.textContent = g.name;
+            li.onclick = () => selectGroup(g.id, g.name);
+            groupsList.appendChild(li);
+          });
+        } catch (err) {
+          console.error("❌ Failed to load groups", err);
+        }
+      }
+
+      // Select group and load messages
+      async function selectGroup(groupId, groupName) {
+        currentGroupId = groupId;
+        chatHeader.textContent = groupName;
+        chatMessages.innerHTML = "";
+
+        try {
+          const res = await fetch(`/api/group-messages/${groupId}/messages`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          const messages = await res.json();
+          messages.forEach(renderMessage);
+        } catch (err) {
+          console.error("❌ Failed to load messages", err);
+        }
+      }
+
+      // Render message
+      function renderMessage(msg) {
+        const div = document.createElement("div");
+        const isSentByMe = msg.userId === user.id;
+
+        div.className = "message " + (isSentByMe ? "sent" : "received");
+        div.innerHTML = `
+    <div><strong>${msg.Sender?.name || "Unknown"}:</strong> ${msg.content}</div>
+    <span class="timestamp">${new Date(
+      msg.createdAt
+    ).toLocaleTimeString()}</span>
+  `;
+        chatMessages.appendChild(div);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+      }
+
+      // Send message
+      sendBtn.onclick = async () => {
+        const content = messageInput.value.trim();
+        if (!content || !currentGroupId) return;
+
+        try {
+          await fetch(`/api/group-messages/${currentGroupId}/send`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ content }),
+          });
+
+          socket.emit("newGroupMessage", {
+            senderId: user.id,
+            groupId: currentGroupId,
+            content,
+          });
+
+          messageInput.value = "";
+        } catch (err) {
+          console.error("❌ Failed to send message", err);
+        }
+      };
+
+      // Receive group message
+      socket.on("groupMessage", (msg) => {
+        if (msg.groupId === currentGroupId) {
+          renderMessage(msg);
+        }
+      });
+
+      // Load contacts for group creation (checkboxes)
+      async function loadContactsForGroup() {
+        try {
+          const res = await fetch("/api/contacts/all", {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          const contacts = await res.json();
+
+          createGroupMembersCheckboxes.innerHTML = "";
+          contacts.forEach((c) => {
+            const div = document.createElement("div");
+            div.className = "form-check";
+            div.innerHTML = `
+              <input class="form-check-input" type="checkbox" value="${c.ContactUser.id}" id="contact_${c.ContactUser.id}">
+              <label class="form-check-label" for="contact_${c.ContactUser.id}">${c.ContactUser.name}</label>
+            `;
+            createGroupMembersCheckboxes.appendChild(div);
+          });
+        } catch (err) {
+          console.error("❌ Failed to load contacts for group", err);
+        }
+      }
+
+      // Create group
+      document
+        .getElementById("createGroupForm")
+        .addEventListener("submit", async (e) => {
+          e.preventDefault();
+          const groupName = document.getElementById("groupName").value.trim();
+          const memberIds = Array.from(
+            document.querySelectorAll(
+              "#createGroupMembersCheckboxes input:checked"
+            )
+          ).map((i) => i.value);
+
+          if (!groupName) return;
+
+          try {
+            await fetch("/api/groups/create", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+              },
+              body: JSON.stringify({ name: groupName, memberIds }),
+            });
+
+            document.getElementById("groupName").value = "";
+            document
+              .querySelectorAll("#createGroupMembersCheckboxes input")
+              .forEach((i) => (i.checked = false));
+            loadGroups();
+          } catch (err) {
+            console.error("❌ Failed to create group", err);
+          }
+        });
+
+      // Load contacts for member management
+      async function loadContacts() {
+        try {
+          const res = await fetch("/api/contacts/all", {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          const contacts = await res.json();
+          contactsSelect.innerHTML = "";
+          contacts.forEach((c) => {
+            const opt = document.createElement("option");
+            opt.value = c.ContactUser.id;
+            opt.textContent = c.ContactUser.name;
+            contactsSelect.appendChild(opt);
+          });
+        } catch (err) {
+          console.error("❌ Failed to load contacts", err);
+        }
+      }
+
+      // Add/Remove/Make Admin
+      addMemberBtn.onclick = async () => {
+        const members = Array.from(contactsSelect.selectedOptions).map(
+          (opt) => opt.value
+        );
+        if (!currentGroupId || !members.length) return;
+        for (const userId of members) {
+          await fetch(`/api/groups/${currentGroupId}/add-member`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ newUserId: userId }),
+          });
+        }
+      };
+      removeMemberBtn.onclick = async () => {
+        const members = Array.from(contactsSelect.selectedOptions).map(
+          (opt) => opt.value
+        );
+        if (!currentGroupId || !members.length) return;
+        for (const userId of members) {
+          await fetch(`/api/groups/${currentGroupId}/remove-member/${userId}`, {
+            method: "DELETE",
+            headers: { Authorization: `Bearer ${token}` },
+          });
+        }
+      };
+      makeAdminBtn.onclick = async () => {
+        const members = Array.from(contactsSelect.selectedOptions).map(
+          (opt) => opt.value
+        );
+        if (!currentGroupId || !members.length) return;
+        for (const userId of members) {
+          await fetch(`/api/groups/${currentGroupId}/make-admin/${userId}`, {
+            method: "PUT",
+            headers: { Authorization: `Bearer ${token}` },
+          });
+        }
+      };
+
+      // Load everything
+      loadGroups();
+      loadContacts();
+      loadContactsForGroup();
+
+      // Sidebar toggle (mobile)
+      const sidebar = document.getElementById("sidebar");
+      const menuToggle = document.getElementById("menuToggle");
+      const backdrop = document.getElementById("backdrop");
+
+      menuToggle.onclick = () => {
+        sidebar.classList.add("show");
+        backdrop.classList.add("show");
+      };
+      backdrop.onclick = () => {
+        sidebar.classList.remove("show");
+        backdrop.classList.remove("show");
+      };
+    </script>
+  </body>
 </html>
