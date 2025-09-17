@@ -75,6 +75,11 @@ Group.belongsToMany(User, {
     onDelete: 'CASCADE'  // if group deleted → memberships gone
 });
 
+// GroupMember ↔ User
+GroupMember.belongsTo(User, { foreignKey: "userId", as: "Member" });
+User.hasMany(GroupMember, { foreignKey: "userId" });
+
+
 // // 💬 Group Messages
 Group.hasMany(Message, {
     foreignKey: 'groupId',

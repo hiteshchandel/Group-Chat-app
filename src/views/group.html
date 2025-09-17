@@ -314,39 +314,71 @@
         chatMessages.scrollTop = chatMessages.scrollHeight;
       }
 
-      // Send message
-      sendBtn.onclick = async () => {
-        const content = messageInput.value.trim();
-        if (!content || !currentGroupId) return;
+  // 📨 Send group message
+  async function sendGroupMessage() {
+    if (!currentGroupId) return alert("⚠️ Select a group first!");
 
-        try {
-          await fetch(`/api/group-messages/${currentGroupId}/send`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify({ content }),
-          });
+    const input = document.getElementById("messageInput");
+    const content = input.value.trim();
+    if (!content) return;
 
-          socket.emit("newGroupMessage", {
-            senderId: user.id,
-            groupId: currentGroupId,
-            content,
-          });
-
-          messageInput.value = "";
-        } catch (err) {
-          console.error("❌ Failed to send message", err);
-        }
-      };
-
-      // Receive group message
-      socket.on("groupMessage", (msg) => {
-        if (msg.groupId === currentGroupId) {
-          renderMessage(msg);
-        }
+    try {
+      // 1️⃣ Save in DB
+      const res = await fetch(`/api/group-messages/${currentGroupId}/send`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer " + token,
+        },
+        body: JSON.stringify({ content }),
       });
+
+      const savedMessage = await res.json();
+
+      // 2️⃣ Emit via WebSocket (with full data)
+      socket.emit("newGroupMessage", {
+        id: savedMessage.id,
+        senderId: user.id,
+        groupId: currentGroupId,
+        content,
+        createdAt: savedMessage.createdAt || new Date(),
+        Sender: { id: user.id, name: user.name }, // for immediate render
+      });
+
+      // 3️⃣ Optimistic UI render (show instantly)
+      renderMessage({
+        id: savedMessage.id,
+        userId: user.id,
+        groupId: currentGroupId,
+        content,
+        createdAt: savedMessage.createdAt || new Date(),
+        Sender: { id: user.id, name: user.name },
+      });
+
+    } catch (err) {
+      console.error("❌ Error sending group message:", err);
+    }
+
+    input.value = "";
+  }
+
+  // 📌 Button click
+  document.getElementById("sendBtn").addEventListener("click", sendGroupMessage);
+
+  // 📌 Enter key send (Shift+Enter = newline)
+  document.getElementById("messageInput").addEventListener("keypress", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      sendGroupMessage();
+    }
+  });
+
+  // 📥 Listen for incoming group messages
+  socket.on("groupMessage", (msg) => {
+    if (msg.groupId === currentGroupId) {
+      renderMessage(msg);
+    }
+  });
 
       // Load contacts for group creation (checkboxes)
       async function loadContactsForGroup() {

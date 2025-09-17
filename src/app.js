@@ -3,7 +3,9 @@ const express = require("express");
 const path = require("path");
 const http = require("http");
 const { Server } = require("socket.io");
-const { sequelize, GroupMember, User } = require("./models/association");
+const { sequelize} = require("./models/association");
+const GroupMember = require('./models/groupMemberModel');
+const User = require('./models/userModel');
 const authRoutes = require("./routes/authRoutes");
 const contactRoutes = require("./routes/contactRoutes");
 const directMessageRoutes = require("./routes/directMessageRoutes");
@@ -88,33 +90,33 @@ io.on("connection", (socket) => {
     const { senderId, groupId } = msg;
 
     try {
-      // ✅ Check sender is group member
+      // ✅ Correct (uses groupId, userId — matches your DB schema)
       const isMember = await GroupMember.findOne({
-        where: { GroupId: groupId, UserId: senderId },
+        where: { groupId: groupId, userId: senderId },
       });
+
       if (!isMember) {
         console.warn(`❌ User ${senderId} is not in group ${groupId}`);
         return;
       }
 
-      // ✅ Fetch all group members
+      // ✅ Correct
       const members = await GroupMember.findAll({
-        where: { GroupId: groupId },
-        include: [{ model: User, attributes: ["id"] }],
+        where: { groupId},
+        include: [{ model: User, as:'Member', attributes: ["id"] }],
       });
+
 
       // ✅ Send to all except sender
       for (const member of members) {
-        if (member.User.id !== senderId) {
-          const memberSocketId = onlineUsers.get(member.User.id);
+        if (member.Member && member.Member.id !== senderId) {
+          const memberSocketId = onlineUsers.get(member.Member.id);
           if (memberSocketId) {
             io.to(memberSocketId).emit("groupMessage", msg);
           }
         }
       }
 
-      // ✅ Emit back to sender
-      io.to(socket.id).emit("groupMessage", msg);
     } catch (err) {
       console.error("❌ Error sending group message:", err);
       socket.emit("error", { message: "Failed to send group message" });
