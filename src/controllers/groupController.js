@@ -47,15 +47,18 @@ exports.getUserGroups = async (req, res) => {
         const userId = req.user.id;
 
         const groups = await Group.findAll({
+            attributes: ["id", "name"],   // ✅ only return id + name
             include: [
                 {
                     model: User,
-                    as: 'Members',
-                    where: { id: userId },
-                    attributes : ['id','name','email']
+                    as: "Members",
+                    attributes: [],           // ✅ don’t include member details
+                    through: { attributes: [] },
+                    where: { id: userId }     // ✅ filter groups where user is a member
                 }
             ]
         });
+
 
         res.json(groups);
     } catch (error) {
@@ -64,12 +67,42 @@ exports.getUserGroups = async (req, res) => {
     }
 };
 
+exports.getGroupMembers = async (req, res) => {
+    try {
+        const { groupId } = req.params;
+
+        const group = await Group.findByPk(groupId, {
+            attributes: ["id", "name"], // basic group info
+            include: [
+                {
+                    model: User,
+                    as: "Members",
+                    attributes: ["id", "name", "email"],
+                    through: {
+                        attributes: ["isAdmin"] // include role info from GroupMember pivot
+                    }
+                }
+            ]
+        });
+
+        if (!group) {
+            return res.status(404).json({ error: "Group not found" });
+        }
+
+        res.json(group.Members);
+    } catch (error) {
+        console.error("Get Group Members Error:", error);
+        res.status(500).json({ error: "Failed to fetch group members" });
+    }
+};
+
 // =========================
 // 5. Add Member (Admin Only)
 // =========================
 exports.addMember = async (req, res) => {
     try {
-        const { groupId, newUserId } = req.body;
+        const { newUserId } = req.body;
+        const { groupId } = req.params; 
         const userId = req.user.id;
 
         // Check if requester is admin
@@ -97,7 +130,7 @@ exports.addMember = async (req, res) => {
 // =========================
 exports.removeMember = async (req, res) => {
     try {
-        const { groupId, memberId } = req.body;
+        const { groupId, memberId } = req.params;
         const userId = req.user.id;
 
         const adminCheck = await GroupMember.findOne({
@@ -119,7 +152,7 @@ exports.removeMember = async (req, res) => {
 // =========================
 exports.makeAdmin = async (req, res) => {
     try {
-        const { groupId, memberId } = req.body;
+        const { groupId, memberId } = req.params;
         const userId = req.user.id;
 
         const adminCheck = await GroupMember.findOne({
@@ -138,3 +171,23 @@ exports.makeAdmin = async (req, res) => {
         res.status(500).json({ error: "Failed to make admin" });
     }
 };
+
+exports.isAdmin = async (req, res) => {
+    try {
+        const groupId = req.params.groupId;
+        const userId = req.user.id;
+
+        const membership = await GroupMember.findOne({
+            where: { groupId, userId },
+        });
+
+        if (!membership) {
+            return res.status(404).json({ message: "User is not a member of this group" })
+        }
+
+        res.json({ isAdmin: membership.isAdmin === true });
+    } catch (error) {
+        console.error("❌ Error checking admin status:", err);
+        res.status(500).json({ message: "Failed to check admin status" });        
+    }
+}

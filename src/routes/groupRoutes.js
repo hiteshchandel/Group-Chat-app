@@ -10,13 +10,18 @@ router.post("/create", verifyToken, groupController.createGroup);
 // ✅ Get all groups where logged-in user is a member
 router.get("/my-groups", verifyToken, groupController.getUserGroups);
 
+// Get all members of a group
+router.get("/:groupId/members", verifyToken, groupController.getGroupMembers);
+
 // ✅ Add a member to group (admin only)
 router.post("/:groupId/add-member", verifyToken, groupController.addMember);
 
 // ✅ Remove a member from group (admin only)
-router.delete("/:groupId/remove-member/:userId", verifyToken, groupController.removeMember);
+router.delete("/:groupId/remove-member/:memberId", verifyToken, groupController.removeMember);
 
 // ✅ Make another member admin (admin only)
-router.put("/:groupId/make-admin/:userId", verifyToken, groupController.makeAdmin);
+router.put("/:groupId/make-admin/:memberId", verifyToken, groupController.makeAdmin);
+
+router.get("/:groupId/isAdmin", verifyToken, groupController.isAdmin);
 
 module.exports = router;

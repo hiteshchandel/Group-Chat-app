@@ -57,12 +57,26 @@
         background: #f9fafb;
       }
       .message {
+        display: flex;
+        flex-direction: column;
         max-width: 70%;
-        padding: 10px 15px;
-        border-radius: 18px;
-        margin-bottom: 12px;
+        padding: 6px 10px;
+        border-radius: 12px;
+        margin-bottom: 6px;
         font-size: 0.9rem;
+        line-height: 1.3;
       }
+
+
+      .bubble {
+        display: inline-block;      /* keeps bubble tight around text */
+        max-width: 100%;            /* max width inside .message */
+        word-wrap: break-word;      /* break long words */
+        white-space: normal;        /* allow line wrapping */
+        line-height: 1.3;
+      }
+
+
       .message.sent {
         background: #dbeafe;
         margin-left: auto;
@@ -131,6 +145,24 @@
           display: block;
         }
       }
+
+      /* Member Modal */
+      #memberModal {
+        display: none;
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: white;
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        z-index: 2000;
+        width: 300px;
+      }
+      #memberModal h5 {
+        margin-bottom: 15px;
+      }
     </style>
   </head>
   <body class="vh-100">
@@ -139,42 +171,10 @@
         <!-- Sidebar -->
         <div class="col-12 col-md-3 col-lg-3 bg-white p-0" id="sidebar">
           <div class="sidebar-header">SeaTalk Groups</div>
-          <div
-            id="statusMessage"
-            class="text-warning text-center small py-1"
-          ></div>
-
           <ul
             class="list-unstyled flex-grow-1 overflow-auto mb-0"
             id="groupsList"
           ></ul>
-
-          <div class="p-2 border-top">
-            <h6 class="fw-bold">Manage Members</h6>
-            <select
-              id="contactsSelect"
-              multiple
-              class="form-select mb-2"
-            ></select>
-            <button
-              class="btn btn-sm btn-outline-primary w-100 mb-1"
-              id="addMemberBtn"
-            >
-              <i class="bi bi-person-plus"></i> Add Member
-            </button>
-            <button
-              class="btn btn-sm btn-outline-danger w-100 mb-1"
-              id="removeMemberBtn"
-            >
-              <i class="bi bi-person-dash"></i> Remove Member
-            </button>
-            <button
-              class="btn btn-sm btn-outline-success w-100"
-              id="makeAdminBtn"
-            >
-              <i class="bi bi-shield-check"></i> Make Admin
-            </button>
-          </div>
 
           <div class="p-2 border-top">
             <h6 class="fw-bold">Create Group</h6>
@@ -186,7 +186,6 @@
                 placeholder="Group name..."
                 required
               />
-              <!-- Updated to checkbox container -->
               <div
                 id="createGroupMembersCheckboxes"
                 class="mb-2"
@@ -206,7 +205,17 @@
           >
             <i class="bi bi-list" id="menuToggle"></i>
             <span id="chatHeader">Select a group to start chat</span>
-            <span></span>
+            <div id="adminActions" style="display: none">
+              <button class="btn btn-sm btn-light me-1" id="addMemberBtn" title="Add Member">
+                <i class="bi bi-person-plus"></i>
+              </button>
+              <button class="btn btn-sm btn-light me-1" id="removeMemberBtn" title="Remove Member">
+                <i class="bi bi-person-dash"></i>
+              </button>
+              <button class="btn btn-sm btn-light" id="makeAdminBtn" title="Make Admin">
+                <i class="bi bi-shield-check"></i>
+              </button>
+            </div>
           </div>
 
           <div id="chatMessages" class="flex-grow-1">
@@ -223,7 +232,6 @@
               class="form-control"
               placeholder="Type a message..."
             />
-            <input type="file" id="fileUpload" hidden />
             <button class="btn btn-primary px-3" id="sendBtn">
               <i class="bi bi-send text-white"></i>
             </button>
@@ -235,11 +243,19 @@
     <!-- Backdrop for mobile -->
     <div id="backdrop"></div>
 
+    <!-- Member Modal -->
+    <div id="memberModal">
+      <h5 id="memberModalTitle">Manage Members</h5>
+      <select id="memberSelect" class="form-select mb-2"></select>
+      <button id="confirmMemberAction" class="btn btn-primary btn-sm">Confirm</button>
+      <button id="cancelMemberAction" class="btn btn-secondary btn-sm">Cancel</button>
+    </div>
+
     <script src="/socket.io/socket.io.js"></script>
     <script>
       const token = sessionStorage.getItem("token");
       const user = JSON.parse(sessionStorage.getItem("user"));
-      let currentGroupId = null;
+      let currentGroupId = null, currentAction = null;
 
       if (!token || !user) {
         window.location.href = "/";
@@ -251,271 +267,261 @@
       const groupsList = document.getElementById("groupsList");
       const chatHeader = document.getElementById("chatHeader");
       const chatMessages = document.getElementById("chatMessages");
-      const messageInput = document.getElementById("messageInput");
-      const sendBtn = document.getElementById("sendBtn");
-      const contactsSelect = document.getElementById("contactsSelect");
-      const addMemberBtn = document.getElementById("addMemberBtn");
-      const removeMemberBtn = document.getElementById("removeMemberBtn");
-      const makeAdminBtn = document.getElementById("makeAdminBtn");
-      const createGroupMembersCheckboxes = document.getElementById(
-        "createGroupMembersCheckboxes"
-      );
 
       // Load user's groups
       async function loadGroups() {
-        try {
-          const res = await fetch("/api/groups/my-groups", {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          const groups = await res.json();
-          groupsList.innerHTML = "";
-          groups.forEach((g) => {
-            const li = document.createElement("li");
-            li.className = "group-item";
-            li.textContent = g.name;
-            li.onclick = () => selectGroup(g.id, g.name);
-            groupsList.appendChild(li);
-          });
-        } catch (err) {
-          console.error("❌ Failed to load groups", err);
-        }
+        const res = await fetch("/api/groups/my-groups", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const groups = await res.json();
+        groupsList.innerHTML = "";
+        groups.forEach((g) => {
+          const li = document.createElement("li");
+          li.className = "group-item";
+          li.textContent = g.name;
+          li.onclick = () => selectGroup(g.id, g.name);
+          groupsList.appendChild(li);
+        });
       }
 
-      // Select group and load messages
+      // Select group
       async function selectGroup(groupId, groupName) {
         currentGroupId = groupId;
         chatHeader.textContent = groupName;
         chatMessages.innerHTML = "";
 
-        try {
-          const res = await fetch(`/api/group-messages/${groupId}/messages`, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          const messages = await res.json();
-          messages.forEach(renderMessage);
-        } catch (err) {
-          console.error("❌ Failed to load messages", err);
-        }
+        // Check admin
+        const resAdmin = await fetch(`/api/groups/${groupId}/isAdmin`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await resAdmin.json();
+        document.getElementById("adminActions").style.display =
+          data.isAdmin ? "block" : "none";
+
+        // Load messages
+        const res = await fetch(`/api/group-messages/${groupId}/messages`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const messages = await res.json();
+        messages.forEach(renderMessage);
       }
 
       // Render message
       function renderMessage(msg) {
         const div = document.createElement("div");
         const isSentByMe = msg.userId === user.id;
-
         div.className = "message " + (isSentByMe ? "sent" : "received");
         div.innerHTML = `
-    <div><strong>${msg.Sender?.name || "Unknown"}:</strong> ${msg.content}</div>
-    <span class="timestamp">${new Date(
-      msg.createdAt
-    ).toLocaleTimeString()}</span>
-  `;
+          <div class="bubble">
+            <strong>${isSentByMe ? "You" : (msg.Sender?.name || "Unknown")}:</strong> ${msg.content}
+            
+          </div>
+          <span class="timestamp">${new Date(msg.createdAt).toLocaleTimeString()}</span>
+        `;
         chatMessages.appendChild(div);
         chatMessages.scrollTop = chatMessages.scrollHeight;
       }
 
-  // 📨 Send group message
-  async function sendGroupMessage() {
-    if (!currentGroupId) return alert("⚠️ Select a group first!");
 
-    const input = document.getElementById("messageInput");
-    const content = input.value.trim();
-    if (!content) return;
+      // 📨 Send group message
+      async function sendGroupMessage() {
+        if (!currentGroupId) return alert("⚠️ Select a group first!");
 
-    try {
-      // 1️⃣ Save in DB
-      const res = await fetch(`/api/group-messages/${currentGroupId}/send`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: "Bearer " + token,
-        },
-        body: JSON.stringify({ content }),
-      });
+        const input = document.getElementById("messageInput");
+        const content = input.value.trim();
+        if (!content) return;
 
-      const savedMessage = await res.json();
-
-      // 2️⃣ Emit via WebSocket (with full data)
-      socket.emit("newGroupMessage", {
-        id: savedMessage.id,
-        senderId: user.id,
-        groupId: currentGroupId,
-        content,
-        createdAt: savedMessage.createdAt || new Date(),
-        Sender: { id: user.id, name: user.name }, // for immediate render
-      });
-
-      // 3️⃣ Optimistic UI render (show instantly)
-      renderMessage({
-        id: savedMessage.id,
-        userId: user.id,
-        groupId: currentGroupId,
-        content,
-        createdAt: savedMessage.createdAt || new Date(),
-        Sender: { id: user.id, name: user.name },
-      });
-
-    } catch (err) {
-      console.error("❌ Error sending group message:", err);
-    }
-
-    input.value = "";
-  }
-
-  // 📌 Button click
-  document.getElementById("sendBtn").addEventListener("click", sendGroupMessage);
-
-  // 📌 Enter key send (Shift+Enter = newline)
-  document.getElementById("messageInput").addEventListener("keypress", (e) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      sendGroupMessage();
-    }
-  });
-
-  // 📥 Listen for incoming group messages
-  socket.on("groupMessage", (msg) => {
-    if (msg.groupId === currentGroupId) {
-      renderMessage(msg);
-    }
-  });
-
-      // Load contacts for group creation (checkboxes)
-      async function loadContactsForGroup() {
         try {
-          const res = await fetch("/api/contacts/all", {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          const contacts = await res.json();
-
-          createGroupMembersCheckboxes.innerHTML = "";
-          contacts.forEach((c) => {
-            const div = document.createElement("div");
-            div.className = "form-check";
-            div.innerHTML = `
-              <input class="form-check-input" type="checkbox" value="${c.ContactUser.id}" id="contact_${c.ContactUser.id}">
-              <label class="form-check-label" for="contact_${c.ContactUser.id}">${c.ContactUser.name}</label>
-            `;
-            createGroupMembersCheckboxes.appendChild(div);
-          });
-        } catch (err) {
-          console.error("❌ Failed to load contacts for group", err);
-        }
-      }
-
-      // Create group
-      document
-        .getElementById("createGroupForm")
-        .addEventListener("submit", async (e) => {
-          e.preventDefault();
-          const groupName = document.getElementById("groupName").value.trim();
-          const memberIds = Array.from(
-            document.querySelectorAll(
-              "#createGroupMembersCheckboxes input:checked"
-            )
-          ).map((i) => i.value);
-
-          if (!groupName) return;
-
-          try {
-            await fetch("/api/groups/create", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${token}`,
-              },
-              body: JSON.stringify({ name: groupName, memberIds }),
-            });
-
-            document.getElementById("groupName").value = "";
-            document
-              .querySelectorAll("#createGroupMembersCheckboxes input")
-              .forEach((i) => (i.checked = false));
-            loadGroups();
-          } catch (err) {
-            console.error("❌ Failed to create group", err);
-          }
-        });
-
-      // Load contacts for member management
-      async function loadContacts() {
-        try {
-          const res = await fetch("/api/contacts/all", {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          const contacts = await res.json();
-          contactsSelect.innerHTML = "";
-          contacts.forEach((c) => {
-            const opt = document.createElement("option");
-            opt.value = c.ContactUser.id;
-            opt.textContent = c.ContactUser.name;
-            contactsSelect.appendChild(opt);
-          });
-        } catch (err) {
-          console.error("❌ Failed to load contacts", err);
-        }
-      }
-
-      // Add/Remove/Make Admin
-      addMemberBtn.onclick = async () => {
-        const members = Array.from(contactsSelect.selectedOptions).map(
-          (opt) => opt.value
-        );
-        if (!currentGroupId || !members.length) return;
-        for (const userId of members) {
-          await fetch(`/api/groups/${currentGroupId}/add-member`, {
+          // 1️⃣ Save in DB
+          const res = await fetch(`/api/group-messages/${currentGroupId}/send`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`,
+              Authorization: "Bearer " + token,
             },
-            body: JSON.stringify({ newUserId: userId }),
+            body: JSON.stringify({ content }),
+          });
+
+          const savedMessage = await res.json();
+
+          // 2️⃣ Emit via WebSocket (with full data)
+          socket.emit("newGroupMessage", {
+            id: savedMessage.id,
+            senderId: user.id,
+            groupId: currentGroupId,
+            content,
+            createdAt: savedMessage.createdAt || new Date(),
+            Sender: { id: user.id, name: user.name }, // for immediate render
+          });
+
+          // 3️⃣ Optimistic UI render (show instantly)
+          renderMessage({
+            id: savedMessage.id,
+            userId: user.id,
+            groupId: currentGroupId,
+            content,
+            createdAt: savedMessage.createdAt || new Date(),
+            Sender: { id: user.id, name: user.name },
+          });
+
+        } catch (err) {
+          console.error("❌ Error sending group message:", err);
+        }
+
+        input.value = "";
+      }
+
+      // 📌 Button click
+      document.getElementById("sendBtn").addEventListener("click", sendGroupMessage);
+
+      document.getElementById("messageInput").addEventListener("keypress", (e) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          sendGroupMessage();
+        }
+      });
+
+      socket.on("groupMessage", (msg) => {
+        if (msg.groupId === currentGroupId) renderMessage(msg);
+      });
+
+      // Modal Logic
+      const memberModal = document.getElementById("memberModal");
+      const memberSelect = document.getElementById("memberSelect");
+      const memberModalTitle = document.getElementById("memberModalTitle");
+
+      async function openMemberModal(action) {
+        if (!currentGroupId) return alert("⚠️ Select a group first!");
+        currentAction = action;
+        const members = await (await fetch(`/api/groups/${currentGroupId}/members`, { headers: { Authorization: `Bearer ${token}` } })).json();
+        const contacts = await (await fetch("/api/contacts/all", { headers: { Authorization: `Bearer ${token}` } })).json();
+        memberSelect.innerHTML = "";
+        console.log(members, "hello")
+
+        if (action === "add") {
+          memberModalTitle.textContent = "Add Member";
+          const memberIds = members.map(m => m.id);
+          contacts.filter(c => !memberIds.includes(c.ContactUser.id)).forEach(c => {
+            const opt = document.createElement("option");
+            opt.value = c.ContactUser.id;
+            opt.textContent = c.ContactUser.name;
+            memberSelect.appendChild(opt);
           });
         }
-      };
-      removeMemberBtn.onclick = async () => {
-        const members = Array.from(contactsSelect.selectedOptions).map(
-          (opt) => opt.value
-        );
-        if (!currentGroupId || !members.length) return;
-        for (const userId of members) {
-          await fetch(`/api/groups/${currentGroupId}/remove-member/${userId}`, {
+        if (action === "remove") {
+          memberModalTitle.textContent = "Remove Member";
+          members.filter(m => m.id !== user.id).forEach(m => {
+            const opt = document.createElement("option");
+            opt.value = m.id;
+            opt.textContent = m.name;
+            memberSelect.appendChild(opt);
+          });
+        }
+        if (action === "makeAdmin") {
+          memberModalTitle.textContent = "Make Admin";
+          members.filter(m => !m.GroupMember.isAdmin).forEach(m => {
+            const opt = document.createElement("option");
+            opt.value = m.id;
+            opt.textContent = m.name;
+            memberSelect.appendChild(opt);
+          });
+        }
+        memberModal.style.display = "block";
+      }
+
+      document.getElementById("confirmMemberAction").onclick = async () => {
+        const selectedId = memberSelect.value;
+        if (!selectedId) return alert("⚠️ Select a user!");
+
+        if (currentAction === "add") {
+          await fetch(`/api/groups/${currentGroupId}/add-member`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ newUserId: selectedId })
+          });
+        }
+
+        if (currentAction === "remove") {
+          await fetch(`/api/groups/${currentGroupId}/remove-member/${selectedId}`, {
             method: "DELETE",
-            headers: { Authorization: `Bearer ${token}` },
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }
           });
         }
-      };
-      makeAdminBtn.onclick = async () => {
-        const members = Array.from(contactsSelect.selectedOptions).map(
-          (opt) => opt.value
-        );
-        if (!currentGroupId || !members.length) return;
-        for (const userId of members) {
-          await fetch(`/api/groups/${currentGroupId}/make-admin/${userId}`, {
+
+        if (currentAction === "makeAdmin") {
+          await fetch(`/api/groups/${currentGroupId}/make-admin/${selectedId}`, {
             method: "PUT",
-            headers: { Authorization: `Bearer ${token}` },
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }
           });
         }
+
+        alert("✅ Action completed!");
+        memberModal.style.display = "none";
+        loadGroups();
       };
 
-      // Load everything
+      document.getElementById("cancelMemberAction").onclick = () => memberModal.style.display = "none";
+      document.getElementById("addMemberBtn").onclick = () => openMemberModal("add");
+      document.getElementById("removeMemberBtn").onclick = () => openMemberModal("remove");
+      document.getElementById("makeAdminBtn").onclick = () => openMemberModal("makeAdmin");
+
+      // Load contacts for group creation
+      async function loadContactsForGroup() {
+        const res = await fetch("/api/contacts/all", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const contacts = await res.json();
+        createGroupMembersCheckboxes.innerHTML = "";
+        contacts.forEach((c) => {
+          const div = document.createElement("div");
+          div.className = "form-check";
+          div.innerHTML = `
+            <input class="form-check-input" type="checkbox" value="${c.ContactUser.id}" id="contact_${c.ContactUser.id}">
+            <label class="form-check-label" for="contact_${c.ContactUser.id}">${c.ContactUser.name}</label>
+          `;
+          createGroupMembersCheckboxes.appendChild(div);
+        });
+      }
+
+      // Create group
+      document.getElementById("createGroupForm").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const groupName = document.getElementById("groupName").value.trim();
+        const memberIds = Array.from(
+          document.querySelectorAll("#createGroupMembersCheckboxes input:checked")
+        ).map((i) => i.value);
+        if (!groupName) return;
+
+        await fetch("/api/groups/create", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ name: groupName, memberIds }),
+        });
+
+        document.getElementById("groupName").value = "";
+        document.querySelectorAll("#createGroupMembersCheckboxes input").forEach((i) => (i.checked = false));
+        loadGroups();
+      });
+
+      // Init
       loadGroups();
-      loadContacts();
       loadContactsForGroup();
 
       // Sidebar toggle (mobile)
       const sidebar = document.getElementById("sidebar");
       const menuToggle = document.getElementById("menuToggle");
       const backdrop = document.getElementById("backdrop");
+      menuToggle.onclick = () => { sidebar.classList.add("show"); backdrop.classList.add("show"); };
+      backdrop.onclick = () => { sidebar.classList.remove("show"); backdrop.classList.remove("show"); };
 
-      menuToggle.onclick = () => {
-        sidebar.classList.add("show");
-        backdrop.classList.add("show");
-      };
-      backdrop.onclick = () => {
-        sidebar.classList.remove("show");
-        backdrop.classList.remove("show");
-      };
+      // Close modal when clicking outside of it
+      window.addEventListener("click", (e) => {
+        const memberModal = document.getElementById("memberModal");
+        if (memberModal.style.display === "block" && !memberModal.contains(e.target)) {
+          memberModal.style.display = "none";
+        }
+      });
+      
     </script>
   </body>
 </html>
