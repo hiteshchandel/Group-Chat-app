@@ -67,15 +67,13 @@
         line-height: 1.3;
       }
 
-
       .bubble {
-        display: inline-block;      /* keeps bubble tight around text */
-        max-width: 100%;            /* max width inside .message */
-        word-wrap: break-word;      /* break long words */
-        white-space: normal;        /* allow line wrapping */
+        display: inline-block; /* keeps bubble tight around text */
+        max-width: 100%; /* max width inside .message */
+        word-wrap: break-word; /* break long words */
+        white-space: normal; /* allow line wrapping */
         line-height: 1.3;
       }
-
 
       .message.sent {
         background: #dbeafe;
@@ -156,7 +154,7 @@
         background: white;
         padding: 20px;
         border-radius: 10px;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
         z-index: 2000;
         width: 300px;
       }
@@ -206,13 +204,25 @@
             <i class="bi bi-list" id="menuToggle"></i>
             <span id="chatHeader">Select a group to start chat</span>
             <div id="adminActions" style="display: none">
-              <button class="btn btn-sm btn-light me-1" id="addMemberBtn" title="Add Member">
+              <button
+                class="btn btn-sm btn-light me-1"
+                id="addMemberBtn"
+                title="Add Member"
+              >
                 <i class="bi bi-person-plus"></i>
               </button>
-              <button class="btn btn-sm btn-light me-1" id="removeMemberBtn" title="Remove Member">
+              <button
+                class="btn btn-sm btn-light me-1"
+                id="removeMemberBtn"
+                title="Remove Member"
+              >
                 <i class="bi bi-person-dash"></i>
               </button>
-              <button class="btn btn-sm btn-light" id="makeAdminBtn" title="Make Admin">
+              <button
+                class="btn btn-sm btn-light"
+                id="makeAdminBtn"
+                title="Make Admin"
+              >
                 <i class="bi bi-shield-check"></i>
               </button>
             </div>
@@ -247,24 +257,29 @@
     <div id="memberModal">
       <h5 id="memberModalTitle">Manage Members</h5>
       <select id="memberSelect" class="form-select mb-2"></select>
-      <button id="confirmMemberAction" class="btn btn-primary btn-sm">Confirm</button>
-      <button id="cancelMemberAction" class="btn btn-secondary btn-sm">Cancel</button>
+      <button id="confirmMemberAction" class="btn btn-primary btn-sm">
+        Confirm
+      </button>
+      <button id="cancelMemberAction" class="btn btn-secondary btn-sm">
+        Cancel
+      </button>
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
     <script>
       const token = sessionStorage.getItem("token");
       const user = JSON.parse(sessionStorage.getItem("user"));
-      let currentGroupId = null, currentAction = null;
+      let currentGroupId = null,
+        currentAction = null;
 
       if (!token || !user) {
         window.location.href = "/";
       }
 
       const socket = io({
-         auth: { token } 
+        auth: { token },
       });
-      
+
       socket.on("connect_error", (err) => {
         console.error("❌ Socket connection failed:", err.message);
         alert("Session expired or invalid token. Please login again.");
@@ -297,13 +312,17 @@
         chatHeader.textContent = groupName;
         chatMessages.innerHTML = "";
 
+        // ✅ Join group room on server
+        socket.emit("joinGroup", groupId);
+
         // Check admin
         const resAdmin = await fetch(`/api/groups/${groupId}/isAdmin`, {
           headers: { Authorization: `Bearer ${token}` },
         });
         const data = await resAdmin.json();
-        document.getElementById("adminActions").style.display =
-          data.isAdmin ? "block" : "none";
+        document.getElementById("adminActions").style.display = data.isAdmin
+          ? "block"
+          : "none";
 
         // Load messages
         const res = await fetch(`/api/group-messages/${groupId}/messages`, {
@@ -316,19 +335,23 @@
       // Render message
       function renderMessage(msg) {
         const div = document.createElement("div");
-        const isSentByMe = msg.userId === user.id;
+        const senderId = msg.userId || msg.senderId;
+        const senderName = msg.Sender?.name || "Unknown";
+        const isSentByMe = senderId === user.id;
+
         div.className = "message " + (isSentByMe ? "sent" : "received");
         div.innerHTML = `
-          <div class="bubble">
-            <strong>${isSentByMe ? "You" : (msg.Sender?.name || "Unknown")}:</strong> ${msg.content}
-            
-          </div>
-          <span class="timestamp">${new Date(msg.createdAt).toLocaleTimeString()}</span>
-        `;
+            <div class="bubble">
+              <strong>${isSentByMe ? "You" : senderName}:</strong>
+              <span class="message-text">${msg.content}</span>
+            </div>
+            <span class="timestamp">${new Date(
+              msg.createdAt
+            ).toLocaleTimeString()}</span>
+          `;
         chatMessages.appendChild(div);
         chatMessages.scrollTop = chatMessages.scrollHeight;
       }
-
 
       // 📨 Send group message
       async function sendGroupMessage() {
@@ -340,14 +363,17 @@
 
         try {
           // 1️⃣ Save in DB
-          const res = await fetch(`/api/group-messages/${currentGroupId}/send`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: "Bearer " + token,
-            },
-            body: JSON.stringify({ content }),
-          });
+          const res = await fetch(
+            `/api/group-messages/${currentGroupId}/send`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: "Bearer " + token,
+              },
+              body: JSON.stringify({ content }),
+            }
+          );
 
           const savedMessage = await res.json();
 
@@ -355,15 +381,14 @@
           socket.emit("newGroupMessage", { groupId: currentGroupId, content });
 
           // 3️⃣ Optimistic UI render (show instantly)
-          renderMessage({
-            id: savedMessage.id,
-            userId: user.id,
-            groupId: currentGroupId,
-            content,
-            createdAt: savedMessage.createdAt || new Date(),
-            Sender: { id: user.id, name: user.name },
-          });
-
+          // renderMessage({
+          //   id: savedMessage.id,
+          //   userId: user.id,
+          //   groupId: currentGroupId,
+          //   content,
+          //   createdAt: savedMessage.createdAt || new Date(),
+          //   Sender: { id: user.id, name: user.name },
+          // });
         } catch (err) {
           console.error("❌ Error sending group message:", err);
         }
@@ -372,14 +397,18 @@
       }
 
       // 📌 Button click
-      document.getElementById("sendBtn").addEventListener("click", sendGroupMessage);
+      document
+        .getElementById("sendBtn")
+        .addEventListener("click", sendGroupMessage);
 
-      document.getElementById("messageInput").addEventListener("keypress", (e) => {
-        if (e.key === "Enter" && !e.shiftKey) {
-          e.preventDefault();
-          sendGroupMessage();
-        }
-      });
+      document
+        .getElementById("messageInput")
+        .addEventListener("keypress", (e) => {
+          if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            sendGroupMessage();
+          }
+        });
 
       socket.on("groupMessage", (msg) => {
         if (msg.groupId === currentGroupId) renderMessage(msg);
@@ -393,38 +422,52 @@
       async function openMemberModal(action) {
         if (!currentGroupId) return alert("⚠️ Select a group first!");
         currentAction = action;
-        const members = await (await fetch(`/api/groups/${currentGroupId}/members`, { headers: { Authorization: `Bearer ${token}` } })).json();
-        const contacts = await (await fetch("/api/contacts/all", { headers: { Authorization: `Bearer ${token}` } })).json();
+        const members = await (
+          await fetch(`/api/groups/${currentGroupId}/members`, {
+            headers: { Authorization: `Bearer ${token}` },
+          })
+        ).json();
+        const contacts = await (
+          await fetch("/api/contacts/all", {
+            headers: { Authorization: `Bearer ${token}` },
+          })
+        ).json();
         memberSelect.innerHTML = "";
-        console.log(members, "hello")
+        console.log(members, "hello");
 
         if (action === "add") {
           memberModalTitle.textContent = "Add Member";
-          const memberIds = members.map(m => m.id);
-          contacts.filter(c => !memberIds.includes(c.ContactUser.id)).forEach(c => {
-            const opt = document.createElement("option");
-            opt.value = c.ContactUser.id;
-            opt.textContent = c.ContactUser.name;
-            memberSelect.appendChild(opt);
-          });
+          const memberIds = members.map((m) => m.id);
+          contacts
+            .filter((c) => !memberIds.includes(c.ContactUser.id))
+            .forEach((c) => {
+              const opt = document.createElement("option");
+              opt.value = c.ContactUser.id;
+              opt.textContent = c.ContactUser.name;
+              memberSelect.appendChild(opt);
+            });
         }
         if (action === "remove") {
           memberModalTitle.textContent = "Remove Member";
-          members.filter(m => m.id !== user.id).forEach(m => {
-            const opt = document.createElement("option");
-            opt.value = m.id;
-            opt.textContent = m.name;
-            memberSelect.appendChild(opt);
-          });
+          members
+            .filter((m) => m.id !== user.id)
+            .forEach((m) => {
+              const opt = document.createElement("option");
+              opt.value = m.id;
+              opt.textContent = m.name;
+              memberSelect.appendChild(opt);
+            });
         }
         if (action === "makeAdmin") {
           memberModalTitle.textContent = "Make Admin";
-          members.filter(m => !m.GroupMember.isAdmin).forEach(m => {
-            const opt = document.createElement("option");
-            opt.value = m.id;
-            opt.textContent = m.name;
-            memberSelect.appendChild(opt);
-          });
+          members
+            .filter((m) => !m.GroupMember.isAdmin)
+            .forEach((m) => {
+              const opt = document.createElement("option");
+              opt.value = m.id;
+              opt.textContent = m.name;
+              memberSelect.appendChild(opt);
+            });
         }
         memberModal.style.display = "block";
       }
@@ -436,23 +479,38 @@
         if (currentAction === "add") {
           await fetch(`/api/groups/${currentGroupId}/add-member`, {
             method: "POST",
-            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-            body: JSON.stringify({ newUserId: selectedId })
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ newUserId: selectedId }),
           });
         }
 
         if (currentAction === "remove") {
-          await fetch(`/api/groups/${currentGroupId}/remove-member/${selectedId}`, {
-            method: "DELETE",
-            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }
-          });
+          await fetch(
+            `/api/groups/${currentGroupId}/remove-member/${selectedId}`,
+            {
+              method: "DELETE",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+              },
+            }
+          );
         }
 
         if (currentAction === "makeAdmin") {
-          await fetch(`/api/groups/${currentGroupId}/make-admin/${selectedId}`, {
-            method: "PUT",
-            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }
-          });
+          await fetch(
+            `/api/groups/${currentGroupId}/make-admin/${selectedId}`,
+            {
+              method: "PUT",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+              },
+            }
+          );
         }
 
         alert("✅ Action completed!");
@@ -460,10 +518,14 @@
         loadGroups();
       };
 
-      document.getElementById("cancelMemberAction").onclick = () => memberModal.style.display = "none";
-      document.getElementById("addMemberBtn").onclick = () => openMemberModal("add");
-      document.getElementById("removeMemberBtn").onclick = () => openMemberModal("remove");
-      document.getElementById("makeAdminBtn").onclick = () => openMemberModal("makeAdmin");
+      document.getElementById("cancelMemberAction").onclick = () =>
+        (memberModal.style.display = "none");
+      document.getElementById("addMemberBtn").onclick = () =>
+        openMemberModal("add");
+      document.getElementById("removeMemberBtn").onclick = () =>
+        openMemberModal("remove");
+      document.getElementById("makeAdminBtn").onclick = () =>
+        openMemberModal("makeAdmin");
 
       // Load contacts for group creation
       async function loadContactsForGroup() {
@@ -484,24 +546,33 @@
       }
 
       // Create group
-      document.getElementById("createGroupForm").addEventListener("submit", async (e) => {
-        e.preventDefault();
-        const groupName = document.getElementById("groupName").value.trim();
-        const memberIds = Array.from(
-          document.querySelectorAll("#createGroupMembersCheckboxes input:checked")
-        ).map((i) => i.value);
-        if (!groupName) return;
+      document
+        .getElementById("createGroupForm")
+        .addEventListener("submit", async (e) => {
+          e.preventDefault();
+          const groupName = document.getElementById("groupName").value.trim();
+          const memberIds = Array.from(
+            document.querySelectorAll(
+              "#createGroupMembersCheckboxes input:checked"
+            )
+          ).map((i) => i.value);
+          if (!groupName) return;
 
-        await fetch("/api/groups/create", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ name: groupName, memberIds }),
+          await fetch("/api/groups/create", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ name: groupName, memberIds }),
+          });
+
+          document.getElementById("groupName").value = "";
+          document
+            .querySelectorAll("#createGroupMembersCheckboxes input")
+            .forEach((i) => (i.checked = false));
+          loadGroups();
         });
-
-        document.getElementById("groupName").value = "";
-        document.querySelectorAll("#createGroupMembersCheckboxes input").forEach((i) => (i.checked = false));
-        loadGroups();
-      });
 
       // Init
       loadGroups();
@@ -511,17 +582,25 @@
       const sidebar = document.getElementById("sidebar");
       const menuToggle = document.getElementById("menuToggle");
       const backdrop = document.getElementById("backdrop");
-      menuToggle.onclick = () => { sidebar.classList.add("show"); backdrop.classList.add("show"); };
-      backdrop.onclick = () => { sidebar.classList.remove("show"); backdrop.classList.remove("show"); };
+      menuToggle.onclick = () => {
+        sidebar.classList.add("show");
+        backdrop.classList.add("show");
+      };
+      backdrop.onclick = () => {
+        sidebar.classList.remove("show");
+        backdrop.classList.remove("show");
+      };
 
       // Close modal when clicking outside of it
       window.addEventListener("click", (e) => {
         const memberModal = document.getElementById("memberModal");
-        if (memberModal.style.display === "block" && !memberModal.contains(e.target)) {
+        if (
+          memberModal.style.display === "block" &&
+          !memberModal.contains(e.target)
+        ) {
           memberModal.style.display = "none";
         }
       });
-      
     </script>
   </body>
 </html>

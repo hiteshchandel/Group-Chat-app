@@ -73,6 +73,19 @@ io.on("connection", (socket) => {
 
   console.log("✅ User connected:", userId);
 
+  // Join a group room (when user selects a group on UI)
+  socket.on("joinGroup", async (groupId) => {
+    try {
+      const isMember = await GroupMember.findOne({ where: { groupId, userId } });
+      if (!isMember) return socket.emit("error", { message: "You are not in this group" });
+
+      socket.join(`group_${groupId}`);
+      console.log(`✅ User ${userId} joined group ${groupId}`);
+    } catch (err) {
+      console.error("❌ Error joining group:", err);
+    }
+  });
+
   // Direct message
   socket.on("newMessage", (msg) => {
     const { receiverId, content } = msg;
@@ -97,27 +110,35 @@ io.on("connection", (socket) => {
       const isMember = await GroupMember.findOne({ where: { groupId, userId: senderId } });
       if (!isMember) return socket.emit("error", { message: "You are not in this group" });
 
-      const members = await GroupMember.findAll({
-        where: { groupId },
-        include: [{ model: User, as: 'Member', attributes: ["id","name"] }]
-      });
+      // const members = await GroupMember.findAll({
+      //   where: { groupId },
+      //   include: [{ model: User, as: 'Member', attributes: ["id","name"] }]
+      // });
 
       const senderUser = await User.findByPk(senderId, { attributes: ["id", "name"] });
 
-      for (const member of members) {
-        if (member.Member.id !== senderId) {
-          const memberSocketId = onlineUsers.get(member.Member.id);
-          if (memberSocketId) {
-            io.to(memberSocketId).emit("groupMessage", {
-              groupId,
-              content,
-              senderId,
-              Sender: { id: senderUser.id, name: senderUser.name }, // ✅ correct
-              createdAt: new Date()
-            });
-          }
-        }
-      }
+      // for (const member of members) {
+      //   if (member.Member.id !== senderId) {
+      //     const memberSocketId = onlineUsers.get(member.Member.id);
+      //     if (memberSocketId) {
+      //       io.to(memberSocketId).emit("groupMessage", {
+      //         groupId,
+      //         content,
+      //         senderId,
+      //         Sender: { id: senderUser.id, name: senderUser.name }, // ✅ correct
+      //         createdAt: new Date()
+      //       });
+      //     }
+      //   }
+      // }
+      // ✅ Broadcast to all users in the group room
+      io.to(`group_${groupId}`).emit("groupMessage", {
+        groupId,
+        content,
+        senderId,
+        Sender: { id: senderUser.id, name: senderUser.name },
+        createdAt: new Date(),
+      });
     } catch (err) {
       console.error("❌ Error in newGroupMessage:", err);
       socket.emit("error", { message: "Failed to send group message" });
