@@ -52,84 +52,85 @@ app.use("/api/group-messages", messageRoutes);
 // Track online users
 const onlineUsers = new Map();
 
-// ✅ Authenticate socket with JWT
+// Authenticate socket with JWT
 io.use((socket, next) => {
   try {
-    const token = socket.handshake.auth.token;
-    const user = verifyTokenSocket(token);
-    socket.userId = user.id;
+    const token = socket.handshake.auth?.token;
+    if (!token) throw new Error("No token provided");
+
+    const user = verifyTokenSocket(token); // must throw if invalid
+    socket.data.userId = user.id;
     next();
   } catch (err) {
+    console.warn("❌ Socket authentication failed:", err.message);
     next(new Error("Authentication error"));
   }
 });
 
 io.on("connection", (socket) => {
-  console.log("✅ User connected:", socket.userId);
+  const userId = socket.data.userId;
+  onlineUsers.set(userId, socket.id);
 
-  // Save mapping userId -> socketId
-  socket.on("join", ({ userId }) => {
-    onlineUsers.set(userId, socket.id);
-    console.log("📌 Online users:", onlineUsers);
-  });
+  console.log("✅ User connected:", userId);
 
-  // 🔹 Direct message
+  // Direct message
   socket.on("newMessage", (msg) => {
-    const { senderId, receiverId } = msg;
+    const { receiverId, content } = msg;
+    const senderId = userId; // trusted
 
-    io.to(socket.id).emit("message", msg);
+    // Send to sender (echo)
+    io.to(socket.id).emit("message", { senderId, receiverId, content, createdAt: new Date() });
 
+    // Send to receiver if online
     const receiverSocketId = onlineUsers.get(receiverId);
     if (receiverSocketId) {
-      io.to(receiverSocketId).emit("message", msg);
+      io.to(receiverSocketId).emit("message", { senderId, receiverId, content, createdAt: new Date() });
     }
   });
 
-  // 🔹 Group message
+  // Group message
   socket.on("newGroupMessage", async (msg) => {
-    const { senderId, groupId } = msg;
-
     try {
-      // ✅ Correct (uses groupId, userId — matches your DB schema)
-      const isMember = await GroupMember.findOne({
-        where: { groupId: groupId, userId: senderId },
-      });
+      const senderId = userId;
+      const { groupId, content } = msg;
 
-      if (!isMember) {
-        console.warn(`❌ User ${senderId} is not in group ${groupId}`);
-        return;
-      }
+      const isMember = await GroupMember.findOne({ where: { groupId, userId: senderId } });
+      if (!isMember) return socket.emit("error", { message: "You are not in this group" });
 
-      // ✅ Correct
       const members = await GroupMember.findAll({
-        where: { groupId},
-        include: [{ model: User, as:'Member', attributes: ["id"] }],
+        where: { groupId },
+        include: [{ model: User, as: 'Member', attributes: ["id","name"] }]
       });
 
+      const senderUser = await User.findByPk(senderId, { attributes: ["id", "name"] });
 
-      // ✅ Send to all except sender
       for (const member of members) {
-        if (member.Member && member.Member.id !== senderId) {
+        if (member.Member.id !== senderId) {
           const memberSocketId = onlineUsers.get(member.Member.id);
           if (memberSocketId) {
-            io.to(memberSocketId).emit("groupMessage", msg);
+            io.to(memberSocketId).emit("groupMessage", {
+              groupId,
+              content,
+              senderId,
+              Sender: { id: senderUser.id, name: senderUser.name }, // ✅ correct
+              createdAt: new Date()
+            });
           }
         }
       }
-
     } catch (err) {
-      console.error("❌ Error sending group message:", err);
+      console.error("❌ Error in newGroupMessage:", err);
       socket.emit("error", { message: "Failed to send group message" });
     }
   });
 
+  // Disconnect
   socket.on("disconnect", () => {
-    console.log("❌ User disconnected:", socket.userId);
-    onlineUsers.forEach((value, key) => {
-      if (value === socket.id) onlineUsers.delete(key);
-    });
+    console.log("❌ User disconnected:", userId);
+    onlineUsers.delete(userId);
   });
 });
+
 
 // Sync DB & start server
 sequelize

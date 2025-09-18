@@ -261,8 +261,15 @@
         window.location.href = "/";
       }
 
-      const socket = io({ auth: { token } });
-      socket.emit("join", { userId: user.id });
+      const socket = io({
+         auth: { token } 
+      });
+      
+      socket.on("connect_error", (err) => {
+        console.error("❌ Socket connection failed:", err.message);
+        alert("Session expired or invalid token. Please login again.");
+        window.location.href = "/";
+      });
 
       const groupsList = document.getElementById("groupsList");
       const chatHeader = document.getElementById("chatHeader");
@@ -344,15 +351,8 @@
 
           const savedMessage = await res.json();
 
-          // 2️⃣ Emit via WebSocket (with full data)
-          socket.emit("newGroupMessage", {
-            id: savedMessage.id,
-            senderId: user.id,
-            groupId: currentGroupId,
-            content,
-            createdAt: savedMessage.createdAt || new Date(),
-            Sender: { id: user.id, name: user.name }, // for immediate render
-          });
+          // Emit to server (server will assign senderId)
+          socket.emit("newGroupMessage", { groupId: currentGroupId, content });
 
           // 3️⃣ Optimistic UI render (show instantly)
           renderMessage({
