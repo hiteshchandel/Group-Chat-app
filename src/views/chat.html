@@ -24,12 +24,14 @@
         padding: 10px 15px;
         border-radius: 18px;
         font-size: 0.9rem;
-        word-wrap: break-word;
         margin-bottom: 12px;
         position: relative;
-        overflow-wrap: break-word;
-        white-space: normal;
         line-height: 1.4;
+
+        /* ✅ Wrapping fixes */
+        word-break: break-word;         /* break long words */
+        overflow-wrap: anywhere;        /* force wrap on tablets */
+        white-space: pre-wrap;          /* respect new lines but wrap long text */
       }
       .message.sent {
         background: #dbeafe;
@@ -269,9 +271,9 @@
 
       socket.on("connect", () => {
         console.log("✅ Connected to WebSocket");
-        if (getUserId()) {
-          socket.emit("join", { userId: getUserId() });
-        }
+        // if (getUserId()) {
+        //   socket.emit("join", { userId: getUserId() });
+        // }
       });
 
       // 📩 Listen for new messages

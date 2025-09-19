@@ -12,6 +12,8 @@ const directMessageRoutes = require("./routes/directMessageRoutes");
 const groupRoutes = require("./routes/groupRoutes");
 const messageRoutes = require("./routes/messageRoutes");
 const { verifyTokenSocket } = require("./utils/jwt");
+require('./cron/archiveChats');
+
 
 const app = express();
 const server = http.createServer(app);

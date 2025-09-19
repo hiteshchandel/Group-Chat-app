@@ -4,6 +4,8 @@ const Contact = require('./contactModel');
 const DirectMessage = require('./directMessageModel');
 const Group = require('./groupModel');
 const GroupMember = require('./groupMemberModel');
+const ArchivedMessage = require('./archivedMessageModel');
+const ArchivedDirectMessage = require('./archivedDirectMessageModel');
 const sequelize = require('../config/db');
 
 // A user can have many contacts
@@ -101,6 +103,21 @@ Message.belongsTo(User, {
     as: 'Sender'
 });
 
+// Archived Group Messages
+Group.hasMany(ArchivedMessage, { foreignKey: 'groupId', as: 'ArchivedMessages' });
+ArchivedMessage.belongsTo(Group, { foreignKey: 'groupId', as: 'Group' });
+
+User.hasMany(ArchivedMessage, { foreignKey: 'userId', as: 'ArchivedMessages' });
+ArchivedMessage.belongsTo(User, { foreignKey: 'userId', as: 'Sender' });
+
+// Archived Direct Messages
+User.hasMany(ArchivedDirectMessage, { foreignKey: 'senderId', as: 'SentArchivedMessages' });
+User.hasMany(ArchivedDirectMessage, { foreignKey: 'receiverId', as: 'ReceivedArchivedMessages' });
+
+ArchivedDirectMessage.belongsTo(User, { foreignKey: 'senderId', as: 'Sender' });
+ArchivedDirectMessage.belongsTo(User, { foreignKey: 'receiverId', as: 'Receiver' });
+
+
 module.exports = {
     User,
     Group,
@@ -108,5 +125,7 @@ module.exports = {
     Contact,
     DirectMessage,
     Message,
+    ArchivedMessage,
+    ArchivedDirectMessage,
     sequelize
 };
