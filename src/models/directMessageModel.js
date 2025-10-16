@@ -10,6 +10,9 @@ const DirectMessage = sequelize.define('DirectMessage', {
     content: {
         type: DataTypes.TEXT,
         allowNull: false
+    },
+    media: {
+        type: DataTypes.STRING, allowNull: true
     }
 }, {
     timestamps: true

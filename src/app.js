@@ -13,6 +13,8 @@ const groupRoutes = require("./routes/groupRoutes");
 const messageRoutes = require("./routes/messageRoutes");
 const { verifyTokenSocket } = require("./utils/jwt");
 require('./cron/archiveChats');
+// const { sendTextMessage, sendMediaMessage } = require('./controllers/directMessageController');
+
 
 
 const app = express();
@@ -30,6 +32,8 @@ app.use(express.urlencoded({ extended: true }));
 
 // serve static files
 app.use(express.static(path.join(__dirname, "views")));
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+
 
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "views", "login.html"));
@@ -75,7 +79,7 @@ io.on("connection", (socket) => {
 
   console.log("✅ User connected:", userId);
 
-  // Join a group room (when user selects a group on UI)
+  // Join group room
   socket.on("joinGroup", async (groupId) => {
     try {
       const isMember = await GroupMember.findOne({ where: { groupId, userId } });
@@ -89,17 +93,29 @@ io.on("connection", (socket) => {
   });
 
   // Direct message
-  socket.on("newMessage", (msg) => {
-    const { receiverId, content } = msg;
-    const senderId = userId; // trusted
+  socket.on("newMessage", async (msg) => {
+    try {
+      const { receiverId, content, mediaUrl } = msg;
+      const senderId = userId;
 
-    // Send to sender (echo)
-    io.to(socket.id).emit("message", { senderId, receiverId, content, createdAt: new Date() });
+      if (!receiverId || (!content && !mediaUrl)) return;
 
-    // Send to receiver if online
-    const receiverSocketId = onlineUsers.get(receiverId);
-    if (receiverSocketId) {
-      io.to(receiverSocketId).emit("message", { senderId, receiverId, content, createdAt: new Date() });
+      const payload = {
+        senderId,
+        receiverId,
+        content: content || "",
+        mediaUrl: mediaUrl || null,
+        createdAt: new Date(),
+      };
+
+      const receiverSocketId = onlineUsers.get(receiverId);
+      if (receiverSocketId) {
+        io.to(receiverSocketId).emit("message", payload);
+      }
+      // socket.emit("message", payload);
+    } catch (err) {
+      console.error("❌ Error sending direct message:", err);
+      socket.emit("error", { message: "Failed to send message" });
     }
   });
 
@@ -107,7 +123,7 @@ io.on("connection", (socket) => {
   socket.on("newGroupMessage", async (msg) => {
     try {
       const senderId = userId;
-      const { groupId, content } = msg;
+      const { groupId, content ,media} = msg;
 
       const isMember = await GroupMember.findOne({ where: { groupId, userId: senderId } });
       if (!isMember) return socket.emit("error", { message: "You are not in this group" });
@@ -137,6 +153,7 @@ io.on("connection", (socket) => {
       io.to(`group_${groupId}`).emit("groupMessage", {
         groupId,
         content,
+        media,
         senderId,
         Sender: { id: senderUser.id, name: senderUser.name },
         createdAt: new Date(),
@@ -157,9 +174,9 @@ io.on("connection", (socket) => {
 
 // Sync DB & start server
 sequelize
-  .sync()
+  .sync({ alter: true })  // 👈 This will auto-update your DB schema
   .then(() => {
-    console.log("✅ Database & tables ready!");
+    console.log("✅ Database & tables synced (with alter)!");
     server.listen(process.env.PORT, () => {
       console.log(`🚀 Server running on port ${process.env.PORT}`);
     });
@@ -167,3 +184,4 @@ sequelize
   .catch((err) => {
     console.error("❌ Error creating database & tables:", err);
   });
+

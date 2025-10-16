@@ -1,98 +1,104 @@
-const User = require("../models/userModel");
-const DirectMessage = require("../models/directMessageModel");
-const ArchivedDirectMessage = require("../models/archivedDirectMessageModel");
+const {User} = require("../models/association");
+const {DirectMessage} = require("../models/association");
+const {ArchivedDirectMessage} = require("../models/association");
 const { Op } = require("sequelize");
 
-// ✉️ Send Direct Message
-exports.sendMessage = async (req, res) => {
+// Send text-only message
+exports.sendTextMessage = async (req, res) => {
     try {
         const { receiverId, content } = req.body;
         const senderId = req.user.id;
 
-        if (!receiverId || !content) return res.status(400).json({ message: "ReceiverId and content are required" });
-
-        const receiver = await User.findByPk(receiverId);
-        if (!receiver) return res.status(404).json({ message: "Receiver not found" });
+        if (!receiverId || !content)
+            return res
+                .status(400)
+                .json({ message: "receiverId and content are required" });
 
         const message = await DirectMessage.create({ senderId, receiverId, content });
 
-        return res.status(201).json({ message: "Message sent successfully", data: message });
-
+        return res.status(201).json({
+            content: message.content,
+            mediaUrl: null,
+            createdAt: message.createdAt,
+        });
     } catch (err) {
+        console.error(err);
+        return res
+            .status(500)
+            .json({ message: "Internal server error", error: err.message });
+    }
+};
+
+// Send media + optional text
+exports.sendMediaMessage = async (req, res) => {
+    try {
+        const { receiverId, content } = req.body;
+        const senderId = req.user.id;
+        const media = req.file ? `/uploads/${req.file.filename}` : null;
+
+        if (!receiverId || (!content && !media))
+            return res.status(400).json({ message: "receiverId and content or media are required" });
+
+        const message = await DirectMessage.create({
+            senderId,
+            receiverId,
+            content: content || "",
+            media, // original filename preserved with timestamp
+        });
+
+        return res.status(201).json({
+            content: message.content,
+            mediaUrl: message.media,
+            createdAt: message.createdAt,
+        });
+    } catch (err) {
+        console.error(err);
         return res.status(500).json({ message: "Internal server error", error: err.message });
     }
 };
 
-// // 💬 Get Conversation between two users
-// exports.getConversation = async (req, res) => {
-//     try {
-//         const { contactId } = req.params;
-//         const userId = req.user.id;
-
-//         const messages = await DirectMessage.findAll({
-//             where: {
-//                 [Op.or]: [
-//                     { senderId: userId, receiverId: contactId },
-//                     { senderId: contactId, receiverId: userId }
-//                 ]
-//             },
-//             include: [
-//                 { model: User, as: "Sender", attributes: ["id", "name"] },
-//                 { model: User, as: "Receiver", attributes: ["id", "name"] }
-//             ],
-//             order: [["createdAt", "ASC"]]
-//         });
-
-//         return res.status(200).json(messages);
-
-//     } catch (err) {
-//         return res.status(500).json({ message: "Internal server error", error: err.message });
-//     }
-// };
-
-// 💬 Get Conversation between two users (live + archived)
+// Get conversation (live + archived)
 exports.getConversation = async (req, res) => {
     try {
-        const { contactId } = req.params;
+        const contactId = parseInt(req.params.contactId, 10);
         const userId = req.user.id;
 
-        // 🔹 Live messages
+        if (isNaN(contactId)) return res.status(400).json({ message: "Invalid contactId" });
+
         const liveMessages = await DirectMessage.findAll({
             where: {
                 [Op.or]: [
                     { senderId: userId, receiverId: contactId },
-                    { senderId: contactId, receiverId: userId }
-                ]
+                    { senderId: contactId, receiverId: userId },
+                ],
             },
-            include: [
-                { model: User, as: "Sender", attributes: ["id", "name"] },
-                { model: User, as: "Receiver", attributes: ["id", "name"] }
-            ],
+            order: [["createdAt", "ASC"]],
         });
 
-        // 🔹 Archived messages
         const archivedMessages = await ArchivedDirectMessage.findAll({
             where: {
                 [Op.or]: [
                     { senderId: userId, receiverId: contactId },
-                    { senderId: contactId, receiverId: userId }
-                ]
+                    { senderId: contactId, receiverId: userId },
+                ],
             },
-            include: [
-                { model: User, as: "Sender", attributes: ["id", "name"] },
-                { model: User, as: "Receiver", attributes: ["id", "name"] }
-            ],
+            order: [["createdAt", "ASC"]],
         });
 
-        // Merge + sort by time
-        const allMessages = [...archivedMessages, ...liveMessages].sort(
-            (a, b) => new Date(a.createdAt) - new Date(b.createdAt)
-        );
+        const allMessages = [...archivedMessages, ...liveMessages].map(msg => ({
+            id: msg.id,
+            senderId: msg.senderId,
+            receiverId: msg.receiverId,
+            content: msg.content || "",
+            mediaUrl: msg.media || null,
+            createdAt: msg.createdAt,
+        }));
 
         return res.status(200).json(allMessages);
-
     } catch (err) {
+        console.error("❌ getConversation error:", err);
         return res.status(500).json({ message: "Internal server error", error: err.message });
     }
 };
+
 

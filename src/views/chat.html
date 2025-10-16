@@ -138,6 +138,13 @@
         cursor: pointer;
         font-size: 1.5rem;
       }
+      .message img, .message video {
+        display: block;
+        margin-top: 5px;
+        border-radius: 12px;
+        object-fit: cover; /* keeps aspect ratio nicely */
+      }
+
       @media (max-width: 768px) {
         #sidebar {
           position: fixed;
@@ -220,16 +227,28 @@
 
           <!-- Input -->
           <div class="chat-input d-flex align-items-center gap-2">
+            <!-- Hidden file input -->
+            <input type="file" id="mediaInput" style="display: none;" />
+
+            <!-- Label as icon button to open file selector -->
+            <label for="mediaInput" class="btn btn-light p-2" id="attachBtn" title="Attach media">
+              <i class="bi bi-paperclip"></i>
+            </label>
+
+            <!-- Text input -->
             <input
               type="text"
               id="messageInput"
               class="form-control"
               placeholder="Type a message..."
             />
+
+            <!-- Send button -->
             <button class="btn btn-primary px-3" id="sendBtn">
-              <i class="bi bi-send text-white"></i>
+              <i class="bi bi-send text-white" id="sendIcon"></i>
             </button>
           </div>
+
         </div>
       </div>
     </div>
@@ -242,6 +261,39 @@
       const menuToggle = document.getElementById("menuToggle");
       const sidebar = document.getElementById("sidebar");
       const backdrop = document.getElementById("backdrop");
+      const mediaInput = document.getElementById("mediaInput");
+      const sendIcon = document.getElementById("sendIcon");
+      const messageInput = document.getElementById("messageInput");
+
+      // Change send icon if file selected
+      mediaInput.addEventListener("change", () => {
+        if (mediaInput.files.length > 0) {
+          sendIcon.className = "bi bi-file-earmark-arrow-up text-white"; // file upload icon
+        } else {
+          sendIcon.className = "bi bi-send text-white"; // default send icon
+        }
+      });
+
+      // Reset icon when text input is cleared
+      messageInput.addEventListener("input", () => {
+        if (messageInput.value.trim() !== "") {
+          sendIcon.className = "bi bi-send text-white";
+        } else if (mediaInput.files.length > 0) {
+          sendIcon.className = "bi bi-file-earmark-arrow-up text-white";
+        } else {
+          sendIcon.className = "bi bi-send text-white";
+        }
+      });
+
+      // Trigger send on click or Enter
+      document.getElementById("sendBtn").addEventListener("click", sendMessage);
+      messageInput.addEventListener("keypress", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          sendMessage();
+        }
+      });
+
 
       menuToggle.addEventListener("click", () => {
         sidebar.classList.add("show");
@@ -276,14 +328,14 @@
         // }
       });
 
-      // 📩 Listen for new messages
+      // 📩 Listen for new messages with media
       socket.on("message", (msg) => {
         if (
           (msg.senderId === selectedUserId && msg.receiverId === getUserId()) ||
           (msg.senderId === getUserId() && msg.receiverId === selectedUserId)
         ) {
           const type = msg.senderId === getUserId() ? "sent" : "received";
-          addMessage(msg.content, type, msg.createdAt);
+          addMessage(msg.content, type, msg.createdAt, msg.mediaUrl || null);
         }
       });
 
@@ -306,19 +358,41 @@
         });
       }
 
-      // ➕ Add message to UI
-      function addMessage(text, type = "sent", timestamp = new Date()) {
+      function addMessage(content, type = "sent", timestamp = new Date(), mediaUrl = null) {
         const placeholder = chatMessages.querySelector(".text-muted");
         if (placeholder) placeholder.remove();
 
         const msgDiv = document.createElement("div");
         msgDiv.classList.add("message", type);
-        msgDiv.innerHTML = `<span>${text}</span><span class="timestamp">${formatTime(
-          timestamp
-        )}</span>`;
+
+        let mediaHTML = "";
+        if (mediaUrl) {
+          const ext = mediaUrl.split(".").pop().toLowerCase();
+          const fileName = mediaUrl.split("/").pop();
+
+          if (["png","jpg","jpeg","gif"].includes(ext)) {
+            mediaHTML = `<img src="${mediaUrl}" 
+                              style="max-width:250px; max-height:250px; width:auto; height:auto; border-radius:12px; margin-top:5px;"
+                              loading="lazy">`;
+          } else if (["mp4","webm","ogg"].includes(ext)) {
+            mediaHTML = `<video controls 
+                              style="max-width:300px; max-height:300px; border-radius:12px; margin-top:5px;"
+                              preload="metadata">
+                          <source src="${mediaUrl}" type="video/${ext}">
+                        </video>`;
+          } else if (ext === "pdf") {
+            mediaHTML = `<a href="${mediaUrl}" target="_blank">📄 ${fileName}</a>`;
+          } else {
+            mediaHTML = `<a href="${mediaUrl}" target="_blank">${fileName}</a>`;
+          }
+        }
+
+        msgDiv.innerHTML = `${content ? `<span>${content}</span>` : ""}${mediaHTML}<span class="timestamp">${formatTime(timestamp)}</span>`;
         chatMessages.appendChild(msgDiv);
         chatMessages.scrollTop = chatMessages.scrollHeight;
       }
+
+
 
       // 📂 Load all contacts
       async function loadContacts() {
@@ -366,9 +440,7 @@
         try {
           const res = await fetch(
             `http://localhost:3000/api/messages/conversation/${selectedUserId}`,
-            {
-              headers: { Authorization: "Bearer " + token },
-            }
+            { headers: { Authorization: "Bearer " + token } }
           );
           const messages = await res.json();
           chatMessages.innerHTML = "";
@@ -377,7 +449,7 @@
           } else {
             messages.forEach((msg) => {
               const type = msg.senderId === getUserId() ? "sent" : "received";
-              addMessage(msg.content, type, msg.createdAt);
+              addMessage(msg.content, type, msg.createdAt, msg.mediaUrl || null);
             });
           }
         } catch (err) {
@@ -385,44 +457,59 @@
         }
       }
 
-      // 📨 Send message
-      async function sendMessage() {
-        if (!selectedUserId) return alert("Select a user to chat!");
+let sending = false;
 
-        const input = document.getElementById("messageInput");
-        const content = input.value.trim();
-        if (!content) return;
+async function sendMessage() {
+  if (sending) return;
+  sending = true;
 
-        try {
-          // Save in DB
-          const res = await fetch("http://localhost:3000/api/messages/send", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: "Bearer " + token,
-            },
-            body: JSON.stringify({
-              receiverId: selectedUserId,
-              content,
-            }),
-          });
+  if (!selectedUserId) return alert("Select a user to chat!");
 
-          const savedMessage = await res.json();
+  const textContent = messageInput.value.trim();
+  const file = mediaInput.files[0];
 
-          // ✅ Emit via WebSocket
-          socket.emit("newMessage", {
-            // id: savedMessage.id,
-            // senderId: getUserId(),
-            receiverId: selectedUserId,
-            content: content,
-            createdAt: savedMessage.createdAt || new Date(),
-          });
-        } catch (err) {
-          console.error("❌ Error saving message:", err);
-        }
+  if (!textContent && !file) { sending = false; return; }
 
-        input.value = "";
-      }
+  try {
+    let payload;
+    if (file) {
+      const formData = new FormData();
+      formData.append("receiverId", selectedUserId);
+      formData.append("media", file);
+      if (textContent) formData.append("content", textContent);
+
+      const res = await fetch("http://localhost:3000/api/messages/send-media", {
+        method: "POST",
+        headers: { Authorization: "Bearer " + token },
+        body: formData,
+      });
+      payload = await res.json();
+    } else {
+      const res = await fetch("http://localhost:3000/api/messages/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer " + token },
+        body: JSON.stringify({ receiverId: selectedUserId, content: textContent }),
+      });
+      payload = await res.json();
+    }
+
+    addMessage(payload.content || "", "sent", payload.createdAt || new Date(), payload.mediaUrl || null);
+
+    socket.emit("newMessage", {
+      receiverId: selectedUserId,
+      content: payload.content || "",
+      mediaUrl: payload.mediaUrl || null,
+      createdAt: payload.createdAt || new Date(),
+    });
+
+    messageInput.value = "";
+    mediaInput.value = "";
+  } catch (err) {
+    console.error("Error sending message:", err);
+  } finally {
+    sending = false;
+  }
+}
 
       document.getElementById("sendBtn").addEventListener("click", sendMessage);
       document

@@ -10,6 +10,9 @@ const Message = sequelize.define('Message', {
     content: {
         type: DataTypes.TEXT,
         allowNull: false
+    },
+    media: {
+        type: DataTypes.STRING, allowNull: true
     }
 }, {
     timestamps: true

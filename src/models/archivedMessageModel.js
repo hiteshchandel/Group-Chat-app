@@ -23,6 +23,9 @@ const ArchivedMessage = sequelize.define('ArchivedMessage', {
     createdAt: {
         type: DataTypes.DATE,
         allowNull: false
+    },
+    media: {
+        type: DataTypes.STRING, allowNull: true
     }
 }, {
     timestamps: true
